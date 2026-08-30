@@ -232,6 +232,8 @@ BarWidget {
           width: parent.width
           height: Style.space(212)
           radius: Style.space(40)
+          bottomLeftRadius: Style.space(12)
+          bottomRightRadius: Style.space(12)
           color: Color.popups.background
           border.width: 0
 
@@ -239,6 +241,8 @@ BarWidget {
             id: artworkContent
             anchors.fill: parent
             radius: artworkFrame.radius
+            bottomLeftRadius: artworkFrame.bottomLeftRadius
+            bottomRightRadius: artworkFrame.bottomRightRadius
             color: "transparent"
 
             Image {
@@ -326,9 +330,11 @@ BarWidget {
             }
           }
 
-          Rectangle {
+          ClippingRectangle {
             anchors.fill: parent
             radius: artworkFrame.radius
+            bottomLeftRadius: artworkFrame.bottomLeftRadius
+            bottomRightRadius: artworkFrame.bottomRightRadius
             color: "transparent"
             border.width: 1
             border.color: root.artworkOutline
