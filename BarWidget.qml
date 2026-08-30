@@ -42,12 +42,37 @@ BarWidget {
   readonly property string trackDetail: controlPlayer
     ? (controlPlayer.trackArtist || sourceName)
     : (playbackStreams.length > 1 ? playbackStreams.length + " active audio sources" : "PipeWire audio stream")
+  readonly property string trackArtist: controlPlayer
+    ? ((mediaService && mediaService.artist) || controlPlayer.trackArtist || "")
+    : ""
   property var levels: [0, 0, 0, 0, 0]
   property double lastSoundAt: 0
   property real smoothedPeak: 0
   property int silentFrames: 0
   property bool popupOpen: false
   property bool playing: false
+
+  // Build a stable tonal hierarchy from the active theme. Mixing toward the
+  // popup text makes every level darker on light themes and lighter on dark
+  // themes, while a small accent contribution preserves the theme character.
+  function mixColor(a, b, amount) {
+    var t = Math.max(0, Math.min(1, amount))
+    return Qt.rgba(
+      a.r + (b.r - a.r) * t,
+      a.g + (b.g - a.g) * t,
+      a.b + (b.b - a.b) * t,
+      1
+    )
+  }
+
+  readonly property color playerOutline: mixColor(mixColor(Color.popups.background, Color.popups.text, 0.30), Color.accent, 0.12)
+  readonly property color artworkOutline: mixColor(Color.popups.background, Color.popups.text, 0.28)
+  readonly property color speakerHole: mixColor(Color.popups.background, Color.popups.text, 0.38)
+  readonly property color controlWell: mixColor(mixColor(Color.popups.background, Color.popups.text, 0.24), Color.accent, 0.08)
+  readonly property color buttonIdle: mixColor(Color.popups.background, Color.popups.text, 0.07)
+  readonly property color buttonHover: mixColor(mixColor(Color.popups.background, Color.popups.text, 0.40), Color.accent, 0.08)
+  readonly property color buttonPressed: mixColor(mixColor(Color.popups.background, Color.popups.text, 0.52), Color.accent, 0.08)
+  readonly property color iconShadow: mixColor(Color.popups.background, Color.popups.text, 0.46)
 
   // Stay as a quiet five-pixel handle while a source is paused, so playback
   // controls remain reachable even when there is no audible signal.
@@ -161,7 +186,7 @@ BarWidget {
     contentHeight: popup.fittedContentHeight(Style.space(360))
     borderSpec: Border.none()
 
-    Rectangle {
+    ClippingRectangle {
       anchors.fill: parent
       // PopupCard normally paints its own rectangular card behind custom
       // content. Make that backing surface transparent so only this rounded
@@ -172,43 +197,49 @@ BarWidget {
       radius: Style.space(52)
       // Follow the active Omarchy theme and update live on theme changes.
       color: Color.popups.background
-      border.width: 0
+      border.width: 1
+      border.color: root.playerOutline
       clip: true
+
+      Rectangle {
+        anchors.fill: parent
+        anchors.margins: 1
+        radius: Math.max(0, parent.radius - 1)
+        gradient: Gradient {
+          orientation: Gradient.Vertical
+          GradientStop { position: 0.0; color: root.mixColor(Color.popups.background, Color.popups.text, 0.035) }
+          GradientStop { position: 0.42; color: Color.popups.background }
+          GradientStop { position: 1.0; color: root.mixColor(Color.popups.background, Color.popups.text, 0.065) }
+        }
+      }
+
+      Image {
+        anchors.fill: parent
+        anchors.margins: 1
+        source: Qt.resolvedUrl("assets/matte-plastic-noise.png")
+        fillMode: Image.Tile
+        smooth: false
+        opacity: 0.035
+      }
 
       Column {
         anchors.fill: parent
         anchors.margins: Style.space(10)
         spacing: 0
 
-        Rectangle {
+        ClippingRectangle {
           id: artworkFrame
           width: parent.width
-          height: Style.space(210)
-          radius: Style.space(42)
+          height: Style.space(212)
+          radius: Style.space(40)
           color: Color.popups.background
-          border.width: Style.space(2)
-          border.color: Color.popups.border
+          border.width: 0
 
-          Rectangle {
-            id: artworkMask
-            anchors.fill: artworkContent
-            radius: Style.space(40)
-            visible: false
-            layer.enabled: true
-          }
-
-          Item {
+          ClippingRectangle {
             id: artworkContent
             anchors.fill: parent
-            anchors.margins: Style.space(2)
-            layer.enabled: true
-            layer.smooth: true
-            layer.effect: MultiEffect {
-              maskEnabled: true
-              maskSource: artworkMask
-              maskThresholdMin: 0.3
-              maskSpreadAtMin: 0.3
-            }
+            radius: artworkFrame.radius
+            color: "transparent"
 
             Image {
               anchors.fill: parent
@@ -244,17 +275,63 @@ BarWidget {
                   anchors.verticalCenter: parent.verticalCenter
                 }
                 Text {
-                  width: parent.width - Style.space(22)
+                  id: playbackStatus
+                  anchors.verticalCenter: parent.verticalCenter
                   text: root.controlPlayer
-                    ? ((root.controlPlayer.isPlaying ? "Playing now  ·  " : "Paused  ·  ") + root.trackTitle)
-                    : "No controllable player"
+                    ? (root.controlPlayer.isPlaying ? "Playing now  ·" : "Paused  ·")
+                    : ""
                   color: "#f1f1ec"
                   font.family: "monospace"
                   font.pixelSize: Style.font.bodySmall
-                  elide: Text.ElideRight
+                }
+                Item {
+                  id: marqueeViewport
+                  width: parent.width - Style.space(7) - playbackStatus.paintedWidth - parent.spacing * 2
+                  height: parent.height
+                  clip: true
+                  readonly property string label: root.controlPlayer
+                    ? (root.trackTitle + (root.trackArtist ? "  ·  " + root.trackArtist : ""))
+                    : "No controllable player"
+                  readonly property real marqueeGap: Style.space(36)
+
+                  onLabelChanged: marqueeText.x = 0
+
+                  Text {
+                    id: marqueeText
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: marqueeViewport.label
+                    color: "#f1f1ec"
+                    font.family: "monospace"
+                    font.pixelSize: Style.font.bodySmall
+
+                    NumberAnimation on x {
+                      from: 0
+                      to: -(marqueeText.paintedWidth + marqueeViewport.marqueeGap)
+                      duration: Math.max(1, (marqueeText.paintedWidth + marqueeViewport.marqueeGap) * 34)
+                      loops: Animation.Infinite
+                      running: marqueeText.paintedWidth > marqueeViewport.width
+                    }
+                  }
+
+                  Text {
+                    x: marqueeText.x + marqueeText.paintedWidth + marqueeViewport.marqueeGap
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: marqueeText.paintedWidth > marqueeViewport.width
+                    text: marqueeViewport.label
+                    color: marqueeText.color
+                    font: marqueeText.font
+                  }
                 }
               }
             }
+          }
+
+          Rectangle {
+            anchors.fill: parent
+            radius: artworkFrame.radius
+            color: "transparent"
+            border.width: 1
+            border.color: root.artworkOutline
           }
         }
 
@@ -268,7 +345,7 @@ BarWidget {
             columnSpacing: Style.space(5)
             Repeater {
               model: 185
-              Rectangle { width: Style.space(3); height: width; radius: width / 2; color: Qt.darker(Color.popups.background, 2.0) }
+              Rectangle { width: Style.space(3); height: width; radius: width / 2; color: root.speakerHole }
             }
           }
         }
@@ -276,17 +353,17 @@ BarWidget {
         ClippingRectangle {
           id: controls
           width: parent.width
-          height: Style.space(82)
-          radius: Style.space(13)
-          bottomLeftRadius: Style.space(42)
-          bottomRightRadius: Style.space(42)
-          color: Qt.darker(Color.popups.background, 2.2)
+          height: Style.space(80)
+          radius: Style.space(12)
+          bottomLeftRadius: Style.space(40)
+          bottomRightRadius: Style.space(40)
+          color: root.controlWell
 
           Row {
             id: buttonRow
             anchors.fill: parent
             anchors.margins: Style.space(4)
-            spacing: Style.space(3)
+            spacing: Style.space(4)
 
             Repeater {
               model: [
@@ -301,28 +378,91 @@ BarWidget {
                 width: (buttonRow.width - buttonRow.spacing * 2) / 3
                 height: buttonRow.height
                 radius: Style.space(8)
-                bottomLeftRadius: modelData.action === "previous" ? Style.space(38) : radius
-                bottomRightRadius: modelData.action === "next" ? Style.space(38) : radius
+                bottomLeftRadius: modelData.action === "previous" ? Style.space(36) : radius
+                bottomRightRadius: modelData.action === "next" ? Style.space(36) : radius
                 color: buttonMouse.pressed
-                  ? Qt.darker(Color.popups.background, 1.2)
-                  : (buttonMouse.containsMouse ? Qt.lighter(Color.popups.background, 1.35) : Qt.lighter(Color.popups.background, 1.18))
+                  ? root.buttonPressed
+                  : (buttonMouse.containsMouse ? root.buttonHover : root.buttonIdle)
                 opacity: modelData.enabled ? 1 : 0.35
-                Text {
+                readonly property bool showingPause: modelData.action === "playPause" && root.controlPlayer && root.controlPlayer.isPlaying
+                readonly property url vectorSource: modelData.action === "previous"
+                  ? Qt.resolvedUrl("assets/previous.svg")
+                  : (modelData.action === "next" ? Qt.resolvedUrl("assets/next.svg") : Qt.resolvedUrl("assets/play.svg"))
+                Item {
+                  id: svgIcon
                   anchors.centerIn: parent
-                  anchors.horizontalCenterOffset: Style.space(1)
-                  anchors.verticalCenterOffset: Style.space(2)
-                  text: controlButton.modelData.icon
-                  color: Qt.darker(Color.popups.text, 1.8)
-                  opacity: 0.8
-                  font.family: root.bar.fontFamily
-                  font.pixelSize: controlButton.modelData.action === "playPause" ? Style.space(32) : Style.space(29)
-                }
-                Text {
-                  anchors.centerIn: parent
-                  text: controlButton.modelData.icon
-                  color: Color.popups.text
-                  font.family: root.bar.fontFamily
-                  font.pixelSize: controlButton.modelData.action === "playPause" ? Style.space(32) : Style.space(29)
+                  width: Style.space(38)
+                  height: width
+                  readonly property real glyphSize: controlButton.modelData.action === "playPause" ? Style.space(28) : Style.space(26)
+
+                  Image {
+                    id: vectorSourceImage
+                    anchors.centerIn: parent
+                    anchors.horizontalCenterOffset: Style.space(1)
+                    anchors.verticalCenterOffset: Style.space(2)
+                    width: svgIcon.glyphSize
+                    height: width
+                    source: controlButton.vectorSource
+                    sourceSize.width: 128
+                    sourceSize.height: 128
+                    fillMode: Image.PreserveAspectFit
+                    smooth: true
+                    mipmap: true
+                    visible: !controlButton.showingPause
+                    layer.enabled: true
+                    layer.effect: MultiEffect {
+                      colorization: 1
+                      colorizationColor: root.iconShadow
+                    }
+                  }
+
+                  Image {
+                    anchors.centerIn: parent
+                    width: svgIcon.glyphSize
+                    height: width
+                    source: controlButton.vectorSource
+                    sourceSize.width: 128
+                    sourceSize.height: 128
+                    fillMode: Image.PreserveAspectFit
+                    smooth: true
+                    mipmap: true
+                    visible: !controlButton.showingPause
+                    layer.enabled: true
+                    layer.effect: MultiEffect {
+                      colorization: 1
+                      colorizationColor: Color.popups.text
+                    }
+                  }
+
+                  Item {
+                    anchors.fill: parent
+                    visible: controlButton.showingPause
+
+                    Repeater {
+                      model: [Style.space(10), Style.space(22)]
+                      Rectangle {
+                        required property real modelData
+                        x: modelData + Style.space(1)
+                        y: Style.space(7)
+                        width: Style.space(6)
+                        height: Style.space(26)
+                        radius: width / 2
+                        color: root.iconShadow
+                      }
+                    }
+                    Repeater {
+                      model: [Style.space(10), Style.space(22)]
+                      Rectangle {
+                        required property real modelData
+                        x: modelData
+                        y: Style.space(5)
+                        width: Style.space(6)
+                        height: Style.space(26)
+                        radius: width / 2
+                        color: Color.popups.text
+                      }
+                    }
+                  }
                 }
                 MouseArea {
                   id: buttonMouse

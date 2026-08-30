@@ -8,10 +8,11 @@ hardware-inspired player on click.
 
 - Live PipeWire peak visualization
 - MPRIS album art and track metadata
+- Overflow-only marquee for long track and artist metadata
 - Previous, play/pause, and next controls
 - Automatic paused-player handling
-- Colors that follow the active Omarchy theme
-- Transparent popup corners and hardware-inspired controls
+- Contrast-balanced colors that adapt to the active Omarchy theme
+- Matte-plastic texture, transparent popup corners, and hardware-inspired controls
 
 ## Requirements
 
@@ -63,3 +64,8 @@ buttons are clicked.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+The play, previous, and next control shapes are adapted from SVG Repo assets
+[204978](https://www.svgrepo.com/svg/204978/play),
+[204981](https://www.svgrepo.com/svg/204981/previous), and
+[204973](https://www.svgrepo.com/svg/204973/next).
