@@ -256,7 +256,7 @@ BarWidget {
               anchors.fill: parent
               visible: !root.controlPlayer || !root.controlPlayer.trackArtUrl
               color: "#202522"
-              Text { anchors.centerIn: parent; text: "♫"; color: "#737b76"; font.pixelSize: Style.space(76) }
+              Text { anchors.centerIn: parent; text: "♫"; textFormat: Text.PlainText; color: "#737b76"; font.pixelSize: Style.space(76) }
             }
 
             Rectangle {
@@ -284,6 +284,7 @@ BarWidget {
                   text: root.controlPlayer
                     ? (root.controlPlayer.isPlaying ? "Playing now  ·" : "Paused  ·")
                     : ""
+                  textFormat: Text.PlainText
                   color: "#f1f1ec"
                   font.family: "monospace"
                   font.pixelSize: Style.font.bodySmall
@@ -304,6 +305,7 @@ BarWidget {
                     id: marqueeText
                     anchors.verticalCenter: parent.verticalCenter
                     text: marqueeViewport.label
+                    textFormat: Text.PlainText
                     color: "#f1f1ec"
                     font.family: "monospace"
                     font.pixelSize: Style.font.bodySmall
@@ -322,6 +324,7 @@ BarWidget {
                     anchors.verticalCenter: parent.verticalCenter
                     visible: marqueeText.paintedWidth > marqueeViewport.width
                     text: marqueeViewport.label
+                    textFormat: Text.PlainText
                     color: marqueeText.color
                     font: marqueeText.font
                   }
